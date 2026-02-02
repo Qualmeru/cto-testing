@@ -1,89 +1,109 @@
 using Confluent.Kafka;
 using System.Text;
 
-var config = new ConsumerConfig
+var builder = WebApplication.CreateBuilder(args);
+
+builder.AddServiceDefaults();
+
+builder.Services.AddHostedService<KafkaConsumerService>();
+
+var app = builder.Build();
+
+app.MapDefaultEndpoints();
+
+app.Run();
+
+public class KafkaConsumerService : BackgroundService
 {
-    BootstrapServers = "localhost:9092",
-    GroupId = "test-group",
-    AutoOffsetReset = AutoOffsetReset.Earliest,
-    EnableAutoCommit = false,
-    SecurityProtocol = SecurityProtocol.SaslSsl,
-    SaslMechanism = SaslMechanism.OAuthBearer,
-};
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<KafkaConsumerService> _logger;
+    private readonly string _topic = "test-topic";
+    private readonly string _dlqTopic = "test-topic-dlq";
 
-var producerConfig = new ProducerConfig 
-{ 
-    BootstrapServers = "localhost:9092",
-    SecurityProtocol = SecurityProtocol.SaslSsl,
-    SaslMechanism = SaslMechanism.OAuthBearer,
-};
-
-using var consumer = new ConsumerBuilder<string, string>(config).Build();
-using var dlqProducer = new ProducerBuilder<string, string>(producerConfig).Build();
-
-string topic = "test-topic";
-string dlqTopic = "test-topic-dlq";
-
-consumer.Subscribe(topic);
-
-var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (_, e) => {
-    e.Cancel = true;
-    cts.Cancel();
-};
-
-Console.WriteLine($"Consumer started. Listening on {topic}...");
-
-try
-{
-    while (!cts.IsCancellationRequested)
+    public KafkaConsumerService(IConfiguration configuration, ILogger<KafkaConsumerService> logger)
     {
-        try
+        _configuration = configuration;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var consumerConfig = new ConsumerConfig
         {
-            var consumeResult = consumer.Consume(cts.Token);
-            if (consumeResult == null) continue;
+            BootstrapServers = _configuration["Kafka:BootstrapServers"] ?? "localhost:9092",
+            GroupId = "test-group",
+            AutoOffsetReset = AutoOffsetReset.Earliest,
+            EnableAutoCommit = false,
+            SecurityProtocol = SecurityProtocol.SaslSsl,
+            SaslMechanism = SaslMechanism.OAuthBearer,
+        };
 
-            Console.WriteLine($"Consumed message '{consumeResult.Message.Value}' at: '{consumeResult.TopicPartitionOffset}'.");
+        var producerConfig = new ProducerConfig
+        {
+            BootstrapServers = _configuration["Kafka:BootstrapServers"] ?? "localhost:9092",
+            SecurityProtocol = SecurityProtocol.SaslSsl,
+            SaslMechanism = SaslMechanism.OAuthBearer,
+        };
 
+        using var consumer = new ConsumerBuilder<string, string>(consumerConfig).Build();
+        using var dlqProducer = new ProducerBuilder<string, string>(producerConfig).Build();
+
+        consumer.Subscribe(_topic);
+
+        _logger.LogInformation("Consumer started. Listening on {Topic}...", _topic);
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
             try
             {
-                ProcessMessage(consumeResult.Message);
-                consumer.Commit(consumeResult);
+                var consumeResult = await Task.Run(() => consumer.Consume(stoppingToken), stoppingToken);
+                if (consumeResult == null) continue;
+
+                _logger.LogInformation("Consumed message '{Value}' at: '{Offset}'.", 
+                    consumeResult.Message.Value, consumeResult.TopicPartitionOffset);
+
+                try
+                {
+                    ProcessMessage(consumeResult.Message);
+                    consumer.Commit(consumeResult);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error processing message. Sending to DLQ...");
+
+                    var dlqMessage = new Message<string, string>
+                    {
+                        Key = consumeResult.Message.Key,
+                        Value = consumeResult.Message.Value,
+                        Headers = new Headers
+                        {
+                            { "exception-message", Encoding.UTF8.GetBytes(ex.Message) },
+                            { "original-topic", Encoding.UTF8.GetBytes(consumeResult.Topic) }
+                        }
+                    };
+
+                    await dlqProducer.ProduceAsync(_dlqTopic, dlqMessage, stoppingToken);
+                    consumer.Commit(consumeResult);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error processing message: {ex.Message}. Sending to DLQ...");
-                
-                var dlqMessage = new Message<string, string>
-                {
-                    Key = consumeResult.Message.Key,
-                    Value = consumeResult.Message.Value,
-                    Headers = new Headers
-                    {
-                        { "exception-message", Encoding.UTF8.GetBytes(ex.Message) },
-                        { "original-topic", Encoding.UTF8.GetBytes(consumeResult.Topic) }
-                    }
-                };
-
-                await dlqProducer.ProduceAsync(dlqTopic, dlqMessage);
-                consumer.Commit(consumeResult);
+                _logger.LogError(ex, "Error occurred in consumer loop.");
             }
         }
-        catch (ConsumeException e)
-        {
-            Console.WriteLine($"Error occurred: {e.Error.Reason}");
-        }
-    }
-}
-catch (OperationCanceledException)
-{
-    consumer.Close();
-}
 
-void ProcessMessage(Message<string, string> message)
-{
-    if (message.Value.Contains("FAIL_ME"))
+        consumer.Close();
+    }
+
+    private void ProcessMessage(Message<string, string> message)
     {
-        throw new Exception("Simulated processing failure");
+        if (message.Value.Contains("FAIL_ME"))
+        {
+            throw new Exception("Simulated processing failure");
+        }
     }
 }

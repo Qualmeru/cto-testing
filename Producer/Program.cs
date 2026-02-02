@@ -1,47 +1,51 @@
 using Confluent.Kafka;
+using Microsoft.AspNetCore.Mvc;
 
-var config = new ProducerConfig
+var builder = WebApplication.CreateBuilder(args);
+
+// Add service defaults & Aspire components.
+builder.AddServiceDefaults();
+
+var kafkaConfig = new ProducerConfig
 {
-    BootstrapServers = "localhost:9092",
+    BootstrapServers = builder.Configuration["Kafka:BootstrapServers"] ?? "localhost:9092",
     AllowAutoCreateTopics = true,
     SecurityProtocol = SecurityProtocol.SaslSsl,
     SaslMechanism = SaslMechanism.OAuthBearer,
 };
 
-using var producer = new ProducerBuilder<string, string>(config).Build();
-string topic = "test-topic";
+builder.Services.AddSingleton<IProducer<string, string>>(sp => 
+    new ProducerBuilder<string, string>(kafkaConfig).Build());
 
-Console.WriteLine($"Producer started. Sending messages to {topic}...");
+var app = builder.Build();
 
-for (int i = 0; i < 10; i++)
+app.MapDefaultEndpoints();
+
+app.MapPost("/produce", async ([FromBody] ProduceRequest request, IProducer<string, string> producer) =>
 {
+    var topic = "test-topic";
     var message = new Message<string, string>
     {
-        Key = Guid.NewGuid().ToString(),
-        Value = $"Message {i}: {DateTime.Now}"
+        Key = request.Key ?? Guid.NewGuid().ToString(),
+        Value = request.Value ?? "Default message value"
     };
 
     try
     {
         var deliveryResult = await producer.ProduceAsync(topic, message);
-        Console.WriteLine($"Delivered '{deliveryResult.Value}' to '{deliveryResult.TopicPartitionOffset}'");
+        return Results.Ok(new 
+        { 
+            Status = "Delivered", 
+            deliveryResult.TopicPartitionOffset.Offset,
+            deliveryResult.Value 
+        });
     }
     catch (ProduceException<string, string> e)
     {
-        Console.WriteLine($"Delivery failed: {e.Error.Reason}");
+        return Results.Problem($"Delivery failed: {e.Error.Reason}");
     }
+});
 
-    await Task.Delay(1000);
-}
+app.Run();
 
-// Send a "bad" message to demonstrate DLQ
-var badMessage = new Message<string, string>
-{
-    Key = "bad-key",
-    Value = "FAIL_ME"
-};
-
-await producer.ProduceAsync(topic, badMessage);
-Console.WriteLine("Sent message that should fail in consumer.");
-
-producer.Flush(TimeSpan.FromSeconds(10));
+public record ProduceRequest(string? Key, string? Value);
