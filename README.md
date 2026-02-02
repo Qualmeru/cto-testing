@@ -4,7 +4,7 @@ This project demonstrates a Kafka producer and consumer using ASP.NET Core APIs 
 
 ## Features
 
-- **.NET 10**: All projects target the latest .NET 10 preview.
+- **.NET 10**: All projects target .NET 10.0.
 - **.NET Aspire**: Orchestrates the Producer and Consumer microservices.
 - **OpenTelemetry**: Integrated via .NET Aspire Service Defaults for tracing, metrics, and logging.
 - **Producer API**: A Web API with a `POST /produce` endpoint to send messages to Kafka.
