@@ -6,10 +6,17 @@ var config = new ConsumerConfig
     BootstrapServers = "localhost:9092",
     GroupId = "test-group",
     AutoOffsetReset = AutoOffsetReset.Earliest,
-    EnableAutoCommit = false
+    EnableAutoCommit = false,
+    SecurityProtocol = SecurityProtocol.SaslSsl,
+    SaslMechanism = SaslMechanism.OAuthBearer,
 };
 
-var producerConfig = new ProducerConfig { BootstrapServers = "localhost:9092" };
+var producerConfig = new ProducerConfig 
+{ 
+    BootstrapServers = "localhost:9092",
+    SecurityProtocol = SecurityProtocol.SaslSsl,
+    SaslMechanism = SaslMechanism.OAuthBearer,
+};
 
 using var consumer = new ConsumerBuilder<string, string>(config).Build();
 using var dlqProducer = new ProducerBuilder<string, string>(producerConfig).Build();

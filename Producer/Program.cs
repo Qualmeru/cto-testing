@@ -3,7 +3,9 @@ using Confluent.Kafka;
 var config = new ProducerConfig
 {
     BootstrapServers = "localhost:9092",
-    AllowAutoCreateTopics = true
+    AllowAutoCreateTopics = true,
+    SecurityProtocol = SecurityProtocol.SaslSsl,
+    SaslMechanism = SaslMechanism.OAuthBearer,
 };
 
 using var producer = new ProducerBuilder<string, string>(config).Build();
