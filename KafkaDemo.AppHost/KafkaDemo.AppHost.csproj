@@ -1,4 +1,4 @@
-<Project Sdk="Aspire.AppHost.Sdk/9.0.0">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>

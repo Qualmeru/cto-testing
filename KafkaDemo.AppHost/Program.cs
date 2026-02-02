@@ -1,17 +1,25 @@
 using Aspire.Hosting;
 using System.Runtime.CompilerServices;
 
-var builder = DistributedApplication.CreateBuilder(args);
+namespace KafkaDemo.AppHost;
 
-// Absolute path resolution to avoid "Project not found" errors in different working directories
-string appHostDir = GetSourceDirPath();
-string producerPath = Path.GetFullPath(Path.Combine(appHostDir, "../Producer/Producer.csproj"));
-string consumerPath = Path.GetFullPath(Path.Combine(appHostDir, "../Consumer/Consumer.csproj"));
+public class Program
+{
+    public static void Main(string[] args)
+    {
+        var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddProject("producer", producerPath);
-builder.AddProject("consumer", consumerPath);
+        // Absolute path resolution to avoid "Project not found" errors
+        string appHostDir = GetSourceDirPath();
+        string producerPath = Path.GetFullPath(Path.Combine(appHostDir, "../Producer/Producer.csproj"));
+        string consumerPath = Path.GetFullPath(Path.Combine(appHostDir, "../Consumer/Consumer.csproj"));
 
-builder.Build().Run();
+        builder.AddProject("producer", producerPath);
+        builder.AddProject("consumer", consumerPath);
 
-static string GetSourceDirPath([CallerFilePath] string? filePath = null) 
-    => Path.GetDirectoryName(filePath)!;
+        builder.Build().Run();
+    }
+
+    private static string GetSourceDirPath([CallerFilePath] string? filePath = null) 
+        => Path.GetDirectoryName(filePath)!;
+}
