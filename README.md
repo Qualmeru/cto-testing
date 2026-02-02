@@ -1,15 +1,16 @@
-# Kafka Microservices Demo (.NET Aspire)
+# Kafka Microservices Demo (.NET 10 & Aspire)
 
-This project demonstrates a Kafka producer and consumer using ASP.NET Core APIs and .NET Aspire orchestration.
+This project demonstrates a Kafka producer and consumer using ASP.NET Core APIs and .NET Aspire orchestration, fully targeting .NET 10.
 
 ## Features
 
+- **.NET 10**: All projects target the latest .NET 10 preview.
 - **.NET Aspire**: Orchestrates the Producer and Consumer microservices.
 - **OpenTelemetry**: Integrated via .NET Aspire Service Defaults for tracing, metrics, and logging.
 - **Producer API**: A Web API with a `POST /produce` endpoint to send messages to Kafka.
 - **Consumer API**: A Web API with a background service that consumes messages and handles errors.
 - **Dead Letter Queue (DLQ)**: Failed messages are automatically sent to a DLQ topic with error headers.
-- **Security**: Configured for `SaslSsl` and `OAuthBearer` (as requested).
+- **Security**: Configured for `SaslSsl` and `OAuthBearer` for secure Kafka communication.
 - **Efficient Formatting**: Uses Minimal APIs and modern C# patterns.
 
 ## Structure
@@ -25,7 +26,7 @@ This project demonstrates a Kafka producer and consumer using ASP.NET Core APIs 
     ```bash
     docker-compose up -d
     ```
-    *Note: The included docker-compose is configured for PLAINTEXT. To use the configured SaslSsl/OAuthBearer in the code, you will need a properly configured Kafka cluster.*
+    *Note: The included docker-compose is configured for PLAINTEXT. To use SaslSsl/OAuthBearer as configured in the code, a properly secured Kafka cluster is required.*
 
 2.  **Run the Solution via Aspire**:
     ```bash
@@ -34,7 +35,7 @@ This project demonstrates a Kafka producer and consumer using ASP.NET Core APIs 
     ```
 
 3.  **Produce a Message**:
-    Use the Aspire Dashboard to find the Producer URL, then send a POST request:
+    Find the Producer URL on the Aspire Dashboard, then:
     ```bash
     curl -X POST http://<producer-url>/produce \
          -H "Content-Type: application/json" \
@@ -48,7 +49,3 @@ This project demonstrates a Kafka producer and consumer using ASP.NET Core APIs 
          -H "Content-Type: application/json" \
          -d '{"value": "This message will FAIL_ME"}'
     ```
-
-## .NET 10 Note
-
-Although the projects are currently configured for `.net8.0` to ensure compatibility with the current environment, they are designed to be easily upgraded to `.net10.0` by changing the `TargetFramework` in the `.csproj` files once the SDK is available.
